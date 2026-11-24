@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import '../core/api_config.dart';
 import 'session_provider.dart';
 
 class AuthClient extends http.BaseClient {
@@ -8,7 +9,11 @@ class AuthClient extends http.BaseClient {
 
   AuthClient(this._ref);
 
-  http.Request _copy(http.BaseRequest original, List<int> bytes, String? token) {
+  http.Request _copy(
+    http.BaseRequest original,
+    List<int> bytes,
+    String? token,
+  ) {
     final req = http.Request(original.method, original.url)
       ..followRedirects = original.followRedirects
       ..maxRedirects = original.maxRedirects
@@ -16,8 +21,10 @@ class AuthClient extends http.BaseClient {
       ..headers.addAll(original.headers)
       ..bodyBytes = bytes;
     req.headers.putIfAbsent('Content-Type', () => 'application/json');
+    // Sama dengan Postman: Authorization = Basic, token di header Access-Token.
+    req.headers['Authorization'] = ApiConfig.basicAuth;
     if (token != null && token.isNotEmpty) {
-      req.headers['Authorization'] = 'Bearer $token';
+      req.headers['Access-Token'] = 'Bearer $token';
     }
     return req;
   }
@@ -30,10 +37,12 @@ class AuthClient extends http.BaseClient {
     final first = await _inner.send(_copy(request, bytes, token));
     if (first.statusCode != 401) return first;
 
-    final newToken = await _ref.read(sessionProvider.notifier).refreshAccessToken();
-    if (newToken == null) return first; 
+    final newToken = await _ref
+        .read(sessionProvider.notifier)
+        .refreshAccessToken();
+    if (newToken == null) return first;
 
-    await first.stream.drain(); 
+    await first.stream.drain();
     return _inner.send(_copy(request, bytes, newToken));
   }
 

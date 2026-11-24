@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:waveup_absensi/core/api_exception.dart';
+import 'package:waveup_absensi/models/attendance.dart';
 import 'package:waveup_absensi/pages/attedance_history_page.dart';
+import 'package:waveup_absensi/providers/attendance_provider.dart';
 import 'package:waveup_absensi/providers/session_provider.dart';
 import 'app_bottom_nav_bar.dart';
 import 'leave_request_page.dart';
@@ -46,6 +49,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   late DateTime _now;
   Timer? _timer;
   int _navIndex = 0;
+  bool _checkingIn = false;
+  bool _checkingOut = false;
 
   @override
   void initState() {
@@ -72,8 +77,65 @@ class _HomePageState extends ConsumerState<HomePage> {
     return '${h.toString().padLeft(2, '0')}:$m $p';
   }
 
+  String _hhmm(DateTime? d) {
+    if (d == null) return '--:--';
+    final l = d.toLocal();
+    return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _onCheckIn() async {
+    if (_checkingIn) return;
+    setState(() => _checkingIn = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final a = await ref.read(attendanceProvider.notifier).checkIn();
+      final late = a.lateMinutes > 0
+          ? ' (terlambat ${a.lateMinutes} menit)'
+          : '';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Check-in berhasil pukul ${_hhmm(a.checkInAt)}$late'),
+        ),
+      );
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e, st) {
+      debugPrint('CHECK-IN ERROR: $e\n$st');
+      messenger.showSnackBar(SnackBar(content: Text('Check-in gagal: $e')));
+    } finally {
+      if (mounted) setState(() => _checkingIn = false);
+    }
+  }
+
+  Future<void> _onCheckOut() async {
+    if (_checkingOut) return;
+    setState(() => _checkingOut = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final a = await ref.read(attendanceProvider.notifier).checkOut();
+      final early = a.earlyLeaveMinutes > 0
+          ? ' (pulang lebih awal ${a.earlyLeaveMinutes} menit)'
+          : '';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Check-out berhasil pukul ${_hhmm(a.checkOutAt)}$early',
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e, st) {
+      debugPrint('CHECK-OUT ERROR: $e\n$st');
+      messenger.showSnackBar(SnackBar(content: Text('Check-out gagal: $e')));
+    } finally {
+      if (mounted) setState(() => _checkingOut = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final attendance = ref.watch(attendanceProvider).valueOrNull;
     final session = ref.watch(sessionProvider).valueOrNull;
     if (session == null) return const SizedBox.shrink();
     final user = session.user;
@@ -112,11 +174,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                         padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
                         child: Column(
                           children: [
-                            _checkInButton(),
+                            _checkInButton(attendance),
                             const SizedBox(height: 8),
-                            _checkOutButton(),
+                            _checkOutButton(attendance),
                             const SizedBox(height: 20),
-                            _attendanceSummary(),
+                            _attendanceSummary(attendance),
                             const SizedBox(height: 16),
                             TextButton(
                               onPressed: () => Navigator.of(context).push(
@@ -151,47 +213,87 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  Widget _checkInButton() {
+  Widget _checkInButton(Attendance? a) {
+    final done = a?.hasCheckedIn ?? false;
     return SizedBox(
       width: double.infinity,
       height: 48,
       child: ElevatedButton(
-        onPressed: () {},
+        onPressed: (done || _checkingIn) ? null : _onCheckIn,
         style: ElevatedButton.styleFrom(
           backgroundColor: _teal,
           foregroundColor: Colors.white,
+          disabledBackgroundColor: done
+              ? const Color(0xFF8CCBC8)
+              : const Color(0xFFE9ECEF),
+          disabledForegroundColor: done
+              ? Colors.white
+              : const Color(0xFFB4BAC0),
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        child: const Text(
-          'Check in Time',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
+        child: _checkingIn
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                done ? 'Sudah Check in' : 'Check in Time',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
       ),
     );
   }
 
-  Widget _checkOutButton() {
+  Widget _checkOutButton(Attendance? a) {
+    final checkedIn = a?.hasCheckedIn ?? false;
+    final done = a?.hasCheckedOut ?? false;
+    final enabled = checkedIn && !done && !_checkingOut;
     return SizedBox(
       width: double.infinity,
       height: 48,
       child: ElevatedButton(
-        onPressed: null,
+        onPressed: enabled ? _onCheckOut : null,
         style: ElevatedButton.styleFrom(
-          disabledBackgroundColor: const Color(0xFFE9ECEF),
-          disabledForegroundColor: const Color(0xFFB4BAC0),
+          backgroundColor: _red,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: done
+              ? const Color(0xFFE9A89F)
+              : const Color(0xFFE9ECEF),
+          disabledForegroundColor: done
+              ? Colors.white
+              : const Color(0xFFB4BAC0),
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        child: const Text(
-          'Check out Time',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
+        child: _checkingOut
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                done ? 'Sudah Check out' : 'Check out Time',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
       ),
     );
   }
 
-  Widget _attendanceSummary() {
+  Widget _attendanceSummary(Attendance? a) {
     return IntrinsicHeight(
       child: Row(
         children: [
@@ -199,7 +301,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             child: _timeColumn(
               icon: Icons.history,
               color: const Color(0xFF1B8A4B),
-              time: '10:00 AM',
+              time: _hhmm(a?.checkInAt),
               label: 'Check in time',
             ),
           ),
@@ -208,7 +310,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             child: _timeColumn(
               icon: Icons.update,
               color: _red,
-              time: '17:00 PM',
+              time: _hhmm(a?.checkOutAt),
               label: 'Check out time',
             ),
           ),
@@ -314,8 +416,16 @@ class _Header extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Ganti dengan logo WaveUp (Image.asset / SvgPicture) bila sudah ada.
-                const Icon(Icons.waves_rounded, color: Colors.white, size: 32),
+                Image.asset(
+                  'assets/logo/waveup.png',
+                  height: 36,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.waves_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 40),
