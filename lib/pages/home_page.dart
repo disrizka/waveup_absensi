@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:waveup_absensi/core/api_exception.dart';
 import 'package:waveup_absensi/models/attendance.dart';
 import 'package:waveup_absensi/pages/attedance_history_page.dart';
+import 'package:waveup_absensi/models/employee_schedule.dart';
 import 'package:waveup_absensi/providers/attendance_provider.dart';
+import 'package:waveup_absensi/providers/schedule_provider.dart';
 import 'package:waveup_absensi/providers/session_provider.dart';
 import 'app_bottom_nav_bar.dart';
 import 'leave_request_page.dart';
@@ -23,13 +25,13 @@ class _HomePageState extends ConsumerState<HomePage> {
   static const _red = Color(0xFFD9432F);
 
   static const _days = [
-    'Senin',
-    'Selasa',
-    'Rabu',
-    'Kamis',
-    'Jumat',
-    'Sabtu',
-    'Minggu',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
   static const _months = [
     'January',
@@ -89,19 +91,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final a = await ref.read(attendanceProvider.notifier).checkIn();
-      final late = a.lateMinutes > 0
-          ? ' (terlambat ${a.lateMinutes} menit)'
-          : '';
+      final late = a.lateMinutes > 0 ? ' · ${a.lateMinutes} min late' : '';
       messenger.showSnackBar(
-        SnackBar(
-          content: Text('Check-in berhasil pukul ${_hhmm(a.checkInAt)}$late'),
-        ),
+        SnackBar(content: Text('Checked in at ${_hhmm(a.checkInAt)}$late')),
       );
     } on ApiException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e, st) {
       debugPrint('CHECK-IN ERROR: $e\n$st');
-      messenger.showSnackBar(SnackBar(content: Text('Check-in gagal: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Check-in failed: $e')));
     } finally {
       if (mounted) setState(() => _checkingIn = false);
     }
@@ -114,20 +112,16 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       final a = await ref.read(attendanceProvider.notifier).checkOut();
       final early = a.earlyLeaveMinutes > 0
-          ? ' (pulang lebih awal ${a.earlyLeaveMinutes} menit)'
+          ? ' · left ${a.earlyLeaveMinutes} min early'
           : '';
       messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Check-out berhasil pukul ${_hhmm(a.checkOutAt)}$early',
-          ),
-        ),
+        SnackBar(content: Text('Checked out at ${_hhmm(a.checkOutAt)}$early')),
       );
     } on ApiException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e, st) {
       debugPrint('CHECK-OUT ERROR: $e\n$st');
-      messenger.showSnackBar(SnackBar(content: Text('Check-out gagal: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Check-out failed: $e')));
     } finally {
       if (mounted) setState(() => _checkingOut = false);
     }
@@ -180,6 +174,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                             const SizedBox(height: 20),
                             _attendanceSummary(attendance),
                             const SizedBox(height: 16),
+                            const _TodayScheduleCard(),
+                            const SizedBox(height: 8),
                             TextButton(
                               onPressed: () => Navigator.of(context).push(
                                 MaterialPageRoute(
@@ -242,7 +238,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               )
             : Text(
-                done ? 'Sudah Check in' : 'Check in Time',
+                done ? 'Checked in' : 'Check in Time',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -283,7 +279,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               )
             : Text(
-                done ? 'Sudah Check out' : 'Check out Time',
+                done ? 'Checked out' : 'Check out Time',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -418,12 +414,12 @@ class _Header extends StatelessWidget {
                 ),
                 Image.asset(
                   'assets/logo/waveup.png',
-                  height: 36,
+                  height: 25,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
                     Icons.waves_rounded,
                     color: Colors.white,
-                    size: 32,
+                    size: 20,
                   ),
                 ),
               ],
@@ -494,6 +490,121 @@ class _AnnouncementCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Shows the schedule that applies today (from GET waveup/my-schedule).
+class _TodayScheduleCard extends ConsumerWidget {
+  const _TodayScheduleCard();
+
+  static const _teal = Color(0xFF00857F);
+
+  Widget _box({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Color color = _teal,
+    String? trailing,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1FAF9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFD3EFEC)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trailing != null)
+            Text(
+              trailing,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final schedules = ref.watch(mySchedulesProvider);
+    return schedules.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (list) {
+        if (list.isEmpty) {
+          return _box(
+            icon: Icons.event_busy_outlined,
+            title: 'No schedule assigned',
+            subtitle: 'Ask your admin to assign you a work schedule',
+            color: const Color(0xFF6B7280),
+          );
+        }
+        final today = EmployeeSchedule.forDay(list);
+        if (today == null) {
+          return _box(
+            icon: Icons.weekend_outlined,
+            title: 'No schedule today',
+            subtitle: 'Enjoy your day off',
+            color: const Color(0xFF6B7280),
+          );
+        }
+        return _box(
+          icon: Icons.schedule_rounded,
+          title: today.title.isEmpty ? "Today's schedule" : today.title,
+          subtitle: '${today.startTime} – ${today.endTime}',
+          trailing: today.requiredLocation
+              ? 'Within ${today.radius} m'
+              : 'Any location',
+        );
+      },
     );
   }
 }

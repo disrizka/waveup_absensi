@@ -9,7 +9,9 @@ class LocationService {
   /// ramah pengguna jika GPS mati / izin ditolak / timeout.
   static Future<Position> current() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
-      throw ApiException('GPS tidak aktif. Aktifkan lokasi lalu coba lagi.');
+      throw ApiException(
+        'Location services are turned off. Please enable GPS and try again.',
+      );
     }
 
     var perm = await Geolocator.checkPermission();
@@ -17,11 +19,11 @@ class LocationService {
       perm = await Geolocator.requestPermission();
     }
     if (perm == LocationPermission.denied) {
-      throw ApiException('Izin lokasi ditolak.');
+      throw ApiException('Location permission was denied.');
     }
     if (perm == LocationPermission.deniedForever) {
       throw ApiException(
-        'Izin lokasi ditolak permanen. Aktifkan lewat Pengaturan aplikasi.',
+        'Location permission is permanently denied. Please enable it in the app settings.',
       );
     }
 
@@ -33,7 +35,7 @@ class LocationService {
         ),
       );
     } on TimeoutException {
-      throw ApiException('Gagal mendapatkan lokasi, coba lagi.');
+      throw ApiException('Unable to get your location, please try again.');
     }
   }
 }

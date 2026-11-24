@@ -38,7 +38,7 @@ class AuthRepository {
       throw ApiException(msg, res.statusCode);
     }
     if (body is! Map) {
-      throw ApiException('Response tidak valid dari server', res.statusCode);
+      throw ApiException('Invalid response from server', res.statusCode);
     }
     return Map<String, dynamic>.from(body);
   }
@@ -47,11 +47,11 @@ class AuthRepository {
     try {
       return await action();
     } on TimeoutException {
-      throw ApiException('Koneksi timeout, coba lagi');
+      throw ApiException('Connection timed out, please try again');
     } on SocketException {
-      throw ApiException('Tidak dapat terhubung ke server');
+      throw ApiException('Unable to connect to the server');
     } on http.ClientException {
-      throw ApiException('Tidak dapat terhubung ke server');
+      throw ApiException('Unable to connect to the server');
     }
   }
 
@@ -85,7 +85,7 @@ class AuthRepository {
 
       final body = _decode(res);
       if (body['status'] != 200) {
-        throw ApiException(body['message']?.toString() ?? 'Login gagal');
+        throw ApiException(body['message']?.toString() ?? 'Login failed');
       }
       return Session.fromJson(body);
     });
@@ -93,24 +93,27 @@ class AuthRepository {
 
   Future<String> refreshToken(String refreshToken) {
     return _guard(() async {
-      final res = await _client.get(
-        _uri(ApiConfig.refreshPath),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': ApiConfig.basicAuth,
-          'Refresh-Token': refreshToken,
-        },
-      ).timeout(_timeout);
+      final res = await _client
+          .get(
+            _uri(ApiConfig.refreshPath),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': ApiConfig.basicAuth,
+              'Refresh-Token': refreshToken,
+            },
+          )
+          .timeout(_timeout);
 
       final body = _decode(res);
       final token = body['access_token'] as String?;
       if (body['status'] != 200 || token == null || token.isEmpty) {
-        throw ApiException('Refresh token gagal', body['status'] as int?);
+        throw ApiException('Failed to refresh token', body['status'] as int?);
       }
       return token;
     });
   }
 }
 
-final authRepositoryProvider =
-    Provider<AuthRepository>((ref) => AuthRepository(ref.read(authHttpProvider)));
+final authRepositoryProvider = Provider<AuthRepository>(
+  (ref) => AuthRepository(ref.read(authHttpProvider)),
+);

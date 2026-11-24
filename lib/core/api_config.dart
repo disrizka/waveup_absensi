@@ -7,9 +7,8 @@ class ApiConfig {
   static const checkInPath = 'waveup/employee-attendance/check-in';
   static const checkOutPath = 'waveup/employee-attendance/check-out';
 
-  /// GET waveup/{idBusiness}/employee-schedule?page=1&limit=100
-  static String schedulePath(String idBusiness) =>
-      'waveup/$idBusiness/employee-schedule';
+  /// GET — schedules assigned to the logged-in user.
+  static const mySchedulePath = 'waveup/my-schedule';
 
   static const basicAuth =
       'Basic bWFudWFsX2FwcDpkZGY0YjY1OTE2NTc2N2E2Mjc4NGY5NGM0ZWU1NmQwNzVkYjEwYzk0NTBkYTVjZjgxYjZhZjdiOWY1NmYxZWY3';

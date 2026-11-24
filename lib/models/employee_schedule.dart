@@ -1,10 +1,13 @@
 class EmployeeSchedule {
   final String idEmployeeSchedule;
   final String title;
-  final List<int> days; // 1 = Senin ... 7 = Minggu
+  final List<int> days; // 1 = Monday ... 7 = Sunday
   final String startTime;
   final String endTime;
   final bool requiredLocation;
+  final double? latitude;
+  final double? longitude;
+  final int radius; // meters
   final bool requiredPhoto;
   final String note;
 
@@ -15,11 +18,26 @@ class EmployeeSchedule {
     required this.startTime,
     required this.endTime,
     required this.requiredLocation,
+    this.latitude,
+    this.longitude,
+    this.radius = 0,
     required this.requiredPhoto,
     required this.note,
   });
 
   bool appliesTo(int weekday) => days.contains(weekday);
+
+  /// The schedule that applies on [weekday] (defaults to today), or null.
+  static EmployeeSchedule? forDay(
+    List<EmployeeSchedule> schedules, [
+    int? weekday,
+  ]) {
+    final day = weekday ?? DateTime.now().weekday;
+    for (final s in schedules) {
+      if (s.idEmployeeSchedule.isNotEmpty && s.appliesTo(day)) return s;
+    }
+    return null;
+  }
 
   factory EmployeeSchedule.fromJson(Map<String, dynamic> j) => EmployeeSchedule(
     idEmployeeSchedule: (j['idEmployeeSchedule'] ?? '').toString(),
@@ -30,6 +48,9 @@ class EmployeeSchedule {
     startTime: (j['startTime'] ?? '').toString(),
     endTime: (j['endTime'] ?? '').toString(),
     requiredLocation: j['requiredLocation'] == true,
+    latitude: (j['latitude'] as num?)?.toDouble(),
+    longitude: (j['longitude'] as num?)?.toDouble(),
+    radius: (j['radius'] as num?)?.toInt() ?? 0,
     requiredPhoto: j['requiredPhoto'] == true,
     note: (j['note'] ?? '').toString(),
   );
@@ -41,6 +62,9 @@ class EmployeeSchedule {
     'startTime': startTime,
     'endTime': endTime,
     'requiredLocation': requiredLocation,
+    'latitude': latitude,
+    'longitude': longitude,
+    'radius': radius,
     'requiredPhoto': requiredPhoto,
     'note': note,
   };
